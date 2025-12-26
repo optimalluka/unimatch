@@ -384,6 +384,7 @@ export default function Survey() {
             placeholder="Age" 
             type="number"
             value={profile.age}
+            onWheel={(e) => e.target.blur()}
             className="w-full p-4 mb-4 border-2 border-gray-200 rounded-2xl bg-white text-gray-800 placeholder-gray-400 focus:border-purple-400 focus:outline-none transition" 
             onChange={(e) => setProfile({...profile, age: e.target.value})} 
           />
@@ -495,6 +496,7 @@ export default function Survey() {
                     min="18" 
                     max="30"
                     value={profile.ageMin}
+                    onWheel={(e) => e.target.blur()}
                     className="w-1/2 p-4 border-2 border-gray-200 rounded-2xl bg-white text-gray-800 focus:border-pink-400 focus:outline-none transition" 
                     onChange={(e) => setProfile({...profile, ageMin: parseInt(e.target.value)})} 
                   />
@@ -503,6 +505,7 @@ export default function Survey() {
                     min="18" 
                     max="30"
                     value={profile.ageMax}
+                    onWheel={(e) => e.target.blur()}
                     className="w-1/2 p-4 border-2 border-gray-200 rounded-2xl bg-white text-gray-800 focus:border-pink-400 focus:outline-none transition" 
                     onChange={(e) => setProfile({...profile, ageMax: parseInt(e.target.value)})} 
                   />

@@ -99,49 +99,70 @@ export default function Admin() {
 
   const generateDateIdeas = async (user1, user2, lookingFor) => {
     try {
+      // Import the Princeton dates database
+      const { princetonDates, hobbyVibeMap } = await import('@/lib/princetonDates')
+      
+      // Parse hobbies
       const hobbies1 = typeof user1.hobbies === 'string' ? JSON.parse(user1.hobbies) : (user1.hobbies || [])
       const hobbies2 = typeof user2.hobbies === 'string' ? JSON.parse(user2.hobbies) : (user2.hobbies || [])
       
-      const sharedHobbies = hobbies1.filter(h => hobbies2.includes(h))
+      // Convert hobbies to vibes
+      const person1Vibes = hobbies1.flatMap(hobby => hobbyVibeMap[hobby] || [])
+      const person2Vibes = hobbies2.flatMap(hobby => hobbyVibeMap[hobby] || [])
       
-      const questions = lookingFor === 'dating' ? datingQuestions : friendQuestions
-      const sharedInterests = []
-      for (let i = 0; i < questions.length; i++) {
-        const ans1 = user1.answers[i]
-        const ans2 = user2.answers[i]
-        
-        if (ans1 !== undefined && ans2 !== undefined) {
-          if ((ans1 >= 4 && ans2 >= 4) || (ans1 <= 2 && ans2 <= 2)) {
-            sharedInterests.push({
-              question: questions[i],
-              level: ans1
-            })
-          }
-        }
+      // Find shared vibes
+      const sharedVibes = person1Vibes.filter(vibe => person2Vibes.includes(vibe))
+      
+      // Filter dates that match shared vibes
+      let relevantDates = princetonDates.filter(date => 
+        date.vibes.some(vibe => sharedVibes.includes(vibe))
+      )
+      
+      // If no shared vibes, use casual/popular dates
+      if (relevantDates.length < 5) {
+        relevantDates = princetonDates.filter(date => 
+          date.category === 'casual' || date.category === 'food'
+        )
       }
-
+      
+      // Take top 10 options to give AI
+      const datesToConsider = relevantDates.slice(0, 10)
+      
+      // Fallback if still no dates
+      if (datesToConsider.length === 0) {
+        return `1. Coffee at Small World\n2. Walk around Lake Carnegie\n3. Study at Firestone Library\n4. Late meal at Frist`
+      }
+      
+      // Create improved prompt
       const activityType = lookingFor === 'dating' ? 'date' : 'hangout'
-      const prompt = `You are helping two Princeton students plan their first ${activityType}. Based on their shared hobbies and compatibility, suggest 4 creative, specific ${activityType} ideas.
+      const prompt = `You are helping two Princeton students plan their first ${activityType}.
 
-SHARED HOBBIES:
-${sharedHobbies.length > 0 ? sharedHobbies.join(', ') : 'No shared hobbies'}
+Person 1 hobbies: ${hobbies1.join(', ') || 'various interests'}
+Person 2 hobbies: ${hobbies2.join(', ') || 'various interests'}
 
-User 1's hobbies: ${hobbies1.join(', ') || 'None listed'}
-User 2's hobbies: ${hobbies2.join(', ') || 'None listed'}
+Here are real ${activityType} options available at Princeton:
+${datesToConsider.map(d => `- ${d.name}: ${d.description}`).join('\n')}
 
-Their shared personality traits:
-${sharedInterests.slice(0, 5).map(s => `- ${s.question} (they ${s.level >= 4 ? 'agree' : 'disagree'})`).join('\n')}
+Pick the best 4 ${activityType} ideas from this list that match their shared interests. For each idea, write ONLY the name of the date/activity from the list above.
 
-Context:
-- Location: Princeton, NJ campus and nearby town
-- Budget: College students (free to $30)
-- Season: Fall/Winter
-- Type: ${lookingFor === 'dating' ? 'Romantic date' : 'Platonic friendship activity'}
+Respond with a simple numbered list (no extra text, no explanations):
+1. [activity name]
+2. [activity name]
+3. [activity name]
+4. [activity name]`
 
-Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the idea (no explanations). Keep each idea to 12 words or less.`
-
+      // Call Groq API
       const completion = await groq.chat.completions.create({
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          {
+            role: 'system',
+            content: `You are a helpful assistant that picks ${activityType} ideas from a given list. Always respond with just a numbered list of activity names from the provided options.`
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
         model: 'llama-3.3-70b-versatile',
         temperature: 0.7,
         max_tokens: 300
@@ -152,7 +173,8 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
 
     } catch (error) {
       console.error('Error generating ideas:', error)
-      return `Error generating ideas. Here are some defaults:\n1. Coffee at Small World\n2. Walk around campus\n3. Study at Firestone\n4. Dinner at Hoagie Haven`
+      // Fallback suggestions
+      return `1. Coffee at Small World\n2. Walk around Lake Carnegie\n3. Study at Firestone Library\n4. Late meal at Frist`
     }
   }
 
@@ -190,7 +212,7 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
     }
   }
 
-  // NEW: Calculate shipping bonus with diminishing returns
+  // Calculate shipping bonus with diminishing returns
   const calculateShippingBonus = (ships) => {
     if (!ships || ships.length === 0) return 0
     
@@ -207,7 +229,7 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
     return Math.min(bonus, 5) // Cap at +5 total
   }
 
-  // NEW: Check if two users are shipped together
+  // Check if two users are shipped together
   const checkShips = async (email1, email2, matchType) => {
     try {
       const { data, error } = await supabase
@@ -230,7 +252,7 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
     }
   }
 
-  // NEW: Award points to captains and update leaderboard
+  // Award points to captains and update leaderboard
   const awardShippingPoints = async (ships, matchType) => {
     const pointsPerMatch = matchType === 'dating' ? 10 : 5
 
@@ -316,7 +338,7 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
           const baseScore = calculateCompatibility(user1.answers, user2.answers)
           const hobbyBonus = calculateHobbyBonus(user1, user2)
           
-          // NEW: Check if they're shipped and calculate shipping bonus
+          // Check if they're shipped and calculate shipping bonus
           const ships = await checkShips(user1.email, user2.email, 'dating')
           const shippingBonus = calculateShippingBonus(ships)
           
@@ -364,7 +386,7 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
       
       await saveMatchToDatabase(matchPair)
       
-      // NEW: Award points to captains if this pair was shipped
+      // Award points to captains if this pair was shipped
       if (bestMatch.ships && bestMatch.ships.length > 0) {
         await awardShippingPoints(bestMatch.ships, 'dating')
       }
@@ -393,7 +415,7 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
         const baseScore = calculateCompatibility(user1.answers, user2.answers)
         const hobbyBonus = calculateHobbyBonus(user1, user2)
         
-        // NEW: Check if they're shipped
+        // Check if they're shipped
         const ships = await checkShips(user1.email, user2.email, 'friends')
         const shippingBonus = calculateShippingBonus(ships)
         
@@ -440,7 +462,7 @@ Provide exactly 4 ${activityType} ideas. Format as a numbered list with just the
       
       await saveMatchToDatabase(matchPair)
       
-      // NEW: Award points to captains
+      // Award points to captains
       if (bestMatch.ships && bestMatch.ships.length > 0) {
         await awardShippingPoints(bestMatch.ships, 'friends')
       }
