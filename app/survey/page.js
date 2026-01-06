@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -8,6 +9,7 @@ const supabase = createClient(
 )
 
 export default function Survey() {
+  const router = useRouter()
   const [user, setUser] = useState(null)
   const [email, setEmail] = useState('')
   const [linkSent, setLinkSent] = useState(false)
@@ -92,6 +94,28 @@ export default function Survey() {
   ]
 
   const questions = lookingFor === 'dating' ? datingQuestions : friendQuestions
+
+  // AUTH PROTECTION - Check if user is logged in with Princeton email
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        // Not logged in, redirect to login
+        router.push('/login')
+        return
+      }
+
+      // Check if Princeton email
+      if (!session.user.email?.endsWith('@princeton.edu')) {
+        alert('Sorry, only Princeton students can use UniMatch')
+        await supabase.auth.signOut()
+        router.push('/login')
+      }
+    }
+
+    checkAuth()
+  }, [router])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

@@ -126,7 +126,7 @@ export default function Home() {
 
         <div className="space-y-6 mb-12">
           <a 
-            href="/survey"
+            href="/login"
             className="block bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-10 py-6 rounded-2xl text-2xl font-bold hover:from-purple-600 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-xl text-center"
           >
             📝 Take the Survey

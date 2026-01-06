@@ -14,6 +14,8 @@ const groq = new Groq({
 })
 
 export default function Admin() {
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [datingResponses, setDatingResponses] = useState([])
   const [friendResponses, setFriendResponses] = useState([])
   const [datingMatches, setDatingMatches] = useState([])
@@ -21,8 +23,17 @@ export default function Admin() {
   const [loading, setLoading] = useState(true)
   const [matchingDating, setMatchingDating] = useState(false)
   const [matchingFriends, setMatchingFriends] = useState(false)
-  
-  const DROP_DAY_ID = 'drop_1' // Change this each drop
+
+  // List of admin emails
+  const ADMIN_EMAILS = [
+    'ls8807@princeton.edu',
+    'liam@princeton.edu',
+    'jiya@princeton.edu',
+    'person4@princeton.edu',
+    'person5@princeton.edu'
+  ]
+
+  const DROP_DAY_ID = 'drop_1'
 
   const datingQuestions = [
     "I find deep 2 a.m. talks more romantic than fancy dinners.",
@@ -69,9 +80,33 @@ export default function Admin() {
     "I show my affection through compliments."
   ]
 
+  // Check if user is admin - MUST BE FIRST
   useEffect(() => {
-    fetchResponses()
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        setCheckingAuth(false)
+        return
+      }
+
+      const userEmail = session.user.email
+      if (ADMIN_EMAILS.includes(userEmail)) {
+        setIsAdmin(true)
+      }
+      
+      setCheckingAuth(false)
+    }
+
+    checkAdmin()
   }, [])
+
+  // Fetch responses - RUNS AFTER AUTH CHECK
+  useEffect(() => {
+    if (isAdmin) {
+      fetchResponses()
+    }
+  }, [isAdmin])
 
   const fetchResponses = async () => {
     try {
@@ -99,41 +134,32 @@ export default function Admin() {
 
   const generateDateIdeas = async (user1, user2, lookingFor) => {
     try {
-      // Import the Princeton dates database
       const { princetonDates, hobbyVibeMap } = await import('@/lib/princetonDates')
       
-      // Parse hobbies
       const hobbies1 = typeof user1.hobbies === 'string' ? JSON.parse(user1.hobbies) : (user1.hobbies || [])
       const hobbies2 = typeof user2.hobbies === 'string' ? JSON.parse(user2.hobbies) : (user2.hobbies || [])
       
-      // Convert hobbies to vibes
       const person1Vibes = hobbies1.flatMap(hobby => hobbyVibeMap[hobby] || [])
       const person2Vibes = hobbies2.flatMap(hobby => hobbyVibeMap[hobby] || [])
       
-      // Find shared vibes
       const sharedVibes = person1Vibes.filter(vibe => person2Vibes.includes(vibe))
       
-      // Filter dates that match shared vibes
       let relevantDates = princetonDates.filter(date => 
         date.vibes.some(vibe => sharedVibes.includes(vibe))
       )
       
-      // If no shared vibes, use casual/popular dates
       if (relevantDates.length < 5) {
         relevantDates = princetonDates.filter(date => 
           date.category === 'casual' || date.category === 'food'
         )
       }
       
-      // Take top 10 options to give AI
       const datesToConsider = relevantDates.slice(0, 10)
       
-      // Fallback if still no dates
       if (datesToConsider.length === 0) {
         return `1. Coffee at Small World\n2. Walk around Lake Carnegie\n3. Study at Firestone Library\n4. Late meal at Frist`
       }
       
-      // Create improved prompt
       const activityType = lookingFor === 'dating' ? 'date' : 'hangout'
       const prompt = `You are helping two Princeton students plan their first ${activityType}.
 
@@ -151,7 +177,6 @@ Respond with a simple numbered list (no extra text, no explanations):
 3. [activity name]
 4. [activity name]`
 
-      // Call Groq API
       const completion = await groq.chat.completions.create({
         messages: [
           {
@@ -173,7 +198,6 @@ Respond with a simple numbered list (no extra text, no explanations):
 
     } catch (error) {
       console.error('Error generating ideas:', error)
-      // Fallback suggestions
       return `1. Coffee at Small World\n2. Walk around Lake Carnegie\n3. Study at Firestone Library\n4. Late meal at Frist`
     }
   }
@@ -212,13 +236,9 @@ Respond with a simple numbered list (no extra text, no explanations):
     }
   }
 
-  // Calculate shipping bonus with diminishing returns
   const calculateShippingBonus = (ships) => {
     if (!ships || ships.length === 0) return 0
     
-    // First ship: +2 points
-    // Second ship: +1 point  
-    // Third+ ships: +0.5 points each
     let bonus = 0
     ships.forEach((ship, index) => {
       if (index === 0) bonus += 2
@@ -226,10 +246,9 @@ Respond with a simple numbered list (no extra text, no explanations):
       else bonus += 0.5
     })
     
-    return Math.min(bonus, 5) // Cap at +5 total
+    return Math.min(bonus, 5)
   }
 
-  // Check if two users are shipped together
   const checkShips = async (email1, email2, matchType) => {
     try {
       const { data, error } = await supabase
@@ -252,19 +271,16 @@ Respond with a simple numbered list (no extra text, no explanations):
     }
   }
 
-  // Award points to captains and update leaderboard
   const awardShippingPoints = async (ships, matchType) => {
     const pointsPerMatch = matchType === 'dating' ? 10 : 5
 
     for (const ship of ships) {
       try {
-        // Mark ship as matched
         await supabase
           .from('ships')
           .update({ matched: true, points_awarded: pointsPerMatch })
           .eq('id', ship.id)
 
-        // Update or create captain in leaderboard
         const { data: existingCaptain } = await supabase
           .from('captains_leaderboard')
           .select('*')
@@ -272,7 +288,6 @@ Respond with a simple numbered list (no extra text, no explanations):
           .single()
 
         if (existingCaptain) {
-          // Update existing captain
           await supabase
             .from('captains_leaderboard')
             .update({
@@ -283,7 +298,6 @@ Respond with a simple numbered list (no extra text, no explanations):
             })
             .eq('email', ship.cupid_email)
         } else {
-          // Create new captain
           await supabase
             .from('captains_leaderboard')
             .insert([{
@@ -338,7 +352,6 @@ Respond with a simple numbered list (no extra text, no explanations):
           const baseScore = calculateCompatibility(user1.answers, user2.answers)
           const hobbyBonus = calculateHobbyBonus(user1, user2)
           
-          // Check if they're shipped and calculate shipping bonus
           const ships = await checkShips(user1.email, user2.email, 'dating')
           const shippingBonus = calculateShippingBonus(ships)
           
@@ -369,7 +382,6 @@ Respond with a simple numbered list (no extra text, no explanations):
       console.log(`Generating date ideas for ${user1.name} and ${bestMatch.user2.name}...`)
       const dateIdeas = await generateDateIdeas(user1, bestMatch.user2, 'dating')
       
-      // Dating: 20 questions + 5 hobby bonus + 5 shipping bonus = 30 max
       const matchPair = {
         user1: user1,
         user2: bestMatch.user2,
@@ -386,7 +398,6 @@ Respond with a simple numbered list (no extra text, no explanations):
       
       await saveMatchToDatabase(matchPair)
       
-      // Award points to captains if this pair was shipped
       if (bestMatch.ships && bestMatch.ships.length > 0) {
         await awardShippingPoints(bestMatch.ships, 'dating')
       }
@@ -415,7 +426,6 @@ Respond with a simple numbered list (no extra text, no explanations):
         const baseScore = calculateCompatibility(user1.answers, user2.answers)
         const hobbyBonus = calculateHobbyBonus(user1, user2)
         
-        // Check if they're shipped
         const ships = await checkShips(user1.email, user2.email, 'friends')
         const shippingBonus = calculateShippingBonus(ships)
         
@@ -445,7 +455,6 @@ Respond with a simple numbered list (no extra text, no explanations):
       console.log(`Generating hangout ideas for ${user1.name} and ${bestMatch.user2.name}...`)
       const hangoutIdeas = await generateDateIdeas(user1, bestMatch.user2, 'friends')
       
-      // Friends: 19 questions + 5 hobby bonus + 5 shipping bonus = 29 max
       const matchPair = {
         user1: user1,
         user2: bestMatch.user2,
@@ -462,7 +471,6 @@ Respond with a simple numbered list (no extra text, no explanations):
       
       await saveMatchToDatabase(matchPair)
       
-      // Award points to captains
       if (bestMatch.ships && bestMatch.ships.length > 0) {
         await awardShippingPoints(bestMatch.ships, 'friends')
       }
@@ -503,6 +511,27 @@ Respond with a simple numbered list (no extra text, no explanations):
     }
   }
 
+  // Show loading or access denied AFTER all hooks
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-2xl">Checking access...</div>
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold mb-4">🚫 Access Denied</h1>
+          <p className="text-gray-400 mb-8">You must be a team admin to access this page.</p>
+          <a href="/" className="text-blue-400 hover:text-white">← Back to Home</a>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -520,7 +549,6 @@ Respond with a simple numbered list (no extra text, no explanations):
         
         <h1 className="text-4xl font-bold mb-8">Admin - Drop Day Matching</h1>
         
-        {/* Dating Section */}
         <div className="mb-8 p-6 bg-pink-900 bg-opacity-30 rounded-lg border-2 border-pink-500">
           <div className="flex justify-between items-center">
             <div>
@@ -539,7 +567,6 @@ Respond with a simple numbered list (no extra text, no explanations):
           </div>
         </div>
 
-        {/* Friends Section */}
         <div className="mb-8 p-6 bg-blue-900 bg-opacity-30 rounded-lg border-2 border-blue-500">
           <div className="flex justify-between items-center">
             <div>
@@ -558,7 +585,6 @@ Respond with a simple numbered list (no extra text, no explanations):
           </div>
         </div>
 
-        {/* All Dating Submissions */}
         <div className="mb-8">
           <h2 className="text-2xl mb-4">💕 Dating Submissions ({datingResponses.length})</h2>
           <div className="space-y-2">
@@ -588,7 +614,6 @@ Respond with a simple numbered list (no extra text, no explanations):
           </div>
         </div>
 
-        {/* All Friend Submissions */}
         <div className="mb-8">
           <h2 className="text-2xl mb-4">🤝 Friend Submissions ({friendResponses.length})</h2>
           <div className="space-y-2">
@@ -614,7 +639,6 @@ Respond with a simple numbered list (no extra text, no explanations):
           </div>
         </div>
 
-        {/* Dating Match Results */}
         {datingMatches.length > 0 && (
           <div className="mb-8">
             <h2 className="text-2xl mb-4">💕 Dating Match Results ({datingMatches.length} pairs)</h2>
