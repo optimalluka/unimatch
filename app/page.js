@@ -9,7 +9,8 @@ const supabase = createClient(
 
 export default function Home() {
   const [user, setUser] = useState(null)
-  const [optedOut, setOptedOut] = useState(false)
+  const [datingOptedIn, setDatingOptedIn] = useState(true)
+  const [friendsOptedIn, setFriendsOptedIn] = useState(true)
   const [loading, setLoading] = useState(false)
   const [fishingNotification, setFishingNotification] = useState(null)
 
@@ -17,7 +18,7 @@ export default function Home() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadOptOutStatus(session.user.email)
+        loadOptInStatus(session.user.email)
         checkFishingStatus(session.user.email)
       }
     })
@@ -25,7 +26,7 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadOptOutStatus(session.user.email)
+        loadOptInStatus(session.user.email)
         checkFishingStatus(session.user.email)
       }
     })
@@ -33,19 +34,33 @@ export default function Home() {
     return () => subscription.unsubscribe()
   }, [])
 
-  const loadOptOutStatus = async (email) => {
+  const loadOptInStatus = async (email) => {
     try {
-      const { data } = await supabase
-        .from('responses')
+      // Check dating table
+      const { data: datingData } = await supabase
+        .from('dating')
         .select('opted_out')
         .eq('email', email)
         .maybeSingle()
 
-      if (data) {
-        setOptedOut(data.opted_out || false)
+      if (datingData) {
+        // If opted_out is true, then opted_in is false (inverse)
+        setDatingOptedIn(!datingData.opted_out)
+      }
+
+      // Check friends table
+      const { data: friendsData } = await supabase
+        .from('friends')
+        .select('opted_out')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (friendsData) {
+        // If opted_out is true, then opted_in is false (inverse)
+        setFriendsOptedIn(!friendsData.opted_out)
       }
     } catch (err) {
-      console.error('Error loading opt-out status:', err)
+      console.error('Error loading opt-in status:', err)
     }
   }
 
@@ -65,7 +80,7 @@ export default function Home() {
     }
   }
 
-  const toggleOptOut = async () => {
+  const toggleDatingOptIn = async () => {
     if (!user) {
       alert('Please log in first!')
       return
@@ -73,18 +88,53 @@ export default function Home() {
 
     setLoading(true)
     try {
+      // If currently opted in, we're opting out (set opted_out to true)
+      // If currently opted out, we're opting in (set opted_out to false)
+      const newOptedOut = datingOptedIn // If opted in, opt out (true). If opted out, opt in (false)
+      
       const { error } = await supabase
-        .from('responses')
-        .update({ opted_out: !optedOut })
+        .from('dating')
+        .update({ opted_out: newOptedOut })
         .eq('email', user.email)
 
       if (error) {
         alert('Error: ' + error.message)
       } else {
-        setOptedOut(!optedOut)
-        alert(optedOut 
-          ? '✅ You\'re back in! You\'ll be matched in future drops.' 
-          : '✅ Opted out! You won\'t be matched in future drops.')
+        setDatingOptedIn(!datingOptedIn)
+        alert(datingOptedIn 
+          ? '❌ Opted out of dating matching!' 
+          : '✅ Opted in for dating matching!')
+      }
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
+    setLoading(false)
+  }
+
+  const toggleFriendsOptIn = async () => {
+    if (!user) {
+      alert('Please log in first!')
+      return
+    }
+
+    setLoading(true)
+    try {
+      // If currently opted in, we're opting out (set opted_out to true)
+      // If currently opted out, we're opting in (set opted_out to false)
+      const newOptedOut = friendsOptedIn // If opted in, opt out (true). If opted out, opt in (false)
+      
+      const { error } = await supabase
+        .from('friends')
+        .update({ opted_out: newOptedOut })
+        .eq('email', user.email)
+
+      if (error) {
+        alert('Error: ' + error.message)
+      } else {
+        setFriendsOptedIn(!friendsOptedIn)
+        alert(friendsOptedIn 
+          ? '❌ Opted out of friend matching!' 
+          : '✅ Opted in for friend matching!')
       }
     } catch (err) {
       alert('Error: ' + err.message)
@@ -217,7 +267,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Next Drop & Opt-Out */}
+        {/* Next Drop & Opt-In */}
         <div className="text-center space-y-4">
           <p className="text-gray-400 text-lg">
             Next Drop: <span className="font-semibold text-white">TBD</span>
@@ -225,23 +275,50 @@ export default function Home() {
 
           {user && (
             <div className="inline-block bg-gray-800 bg-opacity-50 rounded-2xl p-6 backdrop-blur">
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={optedOut}
-                  onChange={toggleOptOut}
-                  disabled={loading}
-                  className="w-5 h-5 mr-3"
-                />
-                <span className="text-white">
-                  Opt out of future matching
-                </span>
-              </label>
-              <p className="text-sm text-gray-400 mt-2">
-                {optedOut 
-                  ? '❌ You won\'t be matched in future drops' 
-                  : '✅ You\'ll be included in the next drop'}
-              </p>
+              <h3 className="text-xl font-semibold mb-4 text-white">Matching Preferences</h3>
+              <p className="text-sm text-gray-400 mb-4">Check the boxes to opt-in for matching</p>
+              
+              {/* Dating Opt-in */}
+              <div className="mb-4">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={datingOptedIn}
+                    onChange={toggleDatingOptIn}
+                    disabled={loading}
+                    className="w-5 h-5 mr-3"
+                  />
+                  <span className="text-white text-lg">
+                    💕 Include me in dating matching
+                  </span>
+                </label>
+                <p className="text-sm text-gray-400 mt-1 ml-8">
+                  {datingOptedIn 
+                    ? '✅ You\'ll be matched for dating in future drops' 
+                    : '❌ You won\'t be matched for dating'}
+                </p>
+              </div>
+
+              {/* Friends Opt-in */}
+              <div>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={friendsOptedIn}
+                    onChange={toggleFriendsOptIn}
+                    disabled={loading}
+                    className="w-5 h-5 mr-3"
+                  />
+                  <span className="text-white text-lg">
+                    🤝 Include me in friend matching
+                  </span>
+                </label>
+                <p className="text-sm text-gray-400 mt-1 ml-8">
+                  {friendsOptedIn 
+                    ? '✅ You\'ll be matched for friends in future drops' 
+                    : '❌ You won\'t be matched for friends'}
+                </p>
+              </div>
             </div>
           )}
         </div>

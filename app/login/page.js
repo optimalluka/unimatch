@@ -72,7 +72,7 @@ export default function Login() {
       <div className="max-w-md w-full p-8 bg-gray-900 rounded-lg border-2 border-pink-500">
         <h1 className="text-4xl font-bold mb-4 text-center">Welcome to UniMatch</h1>
         <p className="text-gray-300 mb-8 text-center">
-          Sign in with your Princeton email to find your perfect match
+          Sign in with your Princeton email to find your perfect match. Click the Google Logo!
         </p>
         
         <button
