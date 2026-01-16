@@ -13,6 +13,7 @@ export default function Home() {
   const [friendsOptedIn, setFriendsOptedIn] = useState(true)
   const [loading, setLoading] = useState(false)
   const [fishingNotification, setFishingNotification] = useState(null)
+  const [gamesExpanded, setGamesExpanded] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -36,7 +37,6 @@ export default function Home() {
 
   const loadOptInStatus = async (email) => {
     try {
-      // Check dating table
       const { data: datingData } = await supabase
         .from('dating')
         .select('opted_out')
@@ -44,11 +44,9 @@ export default function Home() {
         .maybeSingle()
 
       if (datingData) {
-        // If opted_out is true, then opted_in is false (inverse)
         setDatingOptedIn(!datingData.opted_out)
       }
 
-      // Check friends table
       const { data: friendsData } = await supabase
         .from('friends')
         .select('opted_out')
@@ -56,7 +54,6 @@ export default function Home() {
         .maybeSingle()
 
       if (friendsData) {
-        // If opted_out is true, then opted_in is false (inverse)
         setFriendsOptedIn(!friendsData.opted_out)
       }
     } catch (err) {
@@ -88,9 +85,7 @@ export default function Home() {
 
     setLoading(true)
     try {
-      // If currently opted in, we're opting out (set opted_out to true)
-      // If currently opted out, we're opting in (set opted_out to false)
-      const newOptedOut = datingOptedIn // If opted in, opt out (true). If opted out, opt in (false)
+      const newOptedOut = datingOptedIn
       
       const { error } = await supabase
         .from('dating')
@@ -119,9 +114,7 @@ export default function Home() {
 
     setLoading(true)
     try {
-      // If currently opted in, we're opting out (set opted_out to true)
-      // If currently opted out, we're opting in (set opted_out to false)
-      const newOptedOut = friendsOptedIn // If opted in, opt out (true). If opted out, opt in (false)
+      const newOptedOut = friendsOptedIn
       
       const { error } = await supabase
         .from('friends')
@@ -157,7 +150,6 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Fishing Notification Banner */}
         {fishingNotification && fishingNotification > 0 && (
           <div className="mb-8 p-6 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-3xl shadow-2xl border-2 border-cyan-300 animate-pulse">
             <div className="text-center">
@@ -224,6 +216,50 @@ export default function Home() {
               <div>Friend Match</div>
             </a>
           </div>
+
+          {/* GAMES DROPDOWN SECTION */}
+          <div className="mt-8">
+            <button
+              onClick={() => setGamesExpanded(!gamesExpanded)}
+              className="w-full bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-8 py-5 rounded-2xl text-xl font-bold hover:from-indigo-700 hover:to-purple-800 transition-all shadow-xl flex items-center justify-between"
+            >
+              <span className="flex items-center gap-3">
+                <span className="text-3xl">🎮</span>
+                <span>Games</span>
+              </span>
+              <span className="text-2xl transform transition-transform" style={{ transform: gamesExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                ▼
+              </span>
+            </button>
+
+            {gamesExpanded && (
+              <div className="mt-4 grid grid-cols-3 gap-4 animate-slideDown">
+                <a 
+                  href="/bingo"
+                  className="block bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-6 py-5 rounded-2xl text-lg font-bold hover:from-blue-700 hover:to-indigo-800 transition-all transform hover:scale-105 shadow-xl text-center"
+                >
+                  <div className="text-3xl mb-2">🎯</div>
+                  <div>Bingo</div>
+                </a>
+
+                <a 
+                  href="/quests"
+                  className="block bg-gradient-to-r from-purple-600 to-pink-700 text-white px-6 py-5 rounded-2xl text-lg font-bold hover:from-purple-700 hover:to-pink-800 transition-all transform hover:scale-105 shadow-xl text-center"
+                >
+                  <div className="text-3xl mb-2">⚔️</div>
+                  <div>Quests</div>
+                </a>
+
+                <a 
+                  href="/confirm-meetup"
+                  className="block bg-gradient-to-r from-green-600 to-teal-700 text-white px-6 py-5 rounded-2xl text-lg font-bold hover:from-green-700 hover:to-teal-800 transition-all transform hover:scale-105 shadow-xl text-center"
+                >
+                  <div className="text-3xl mb-2">📍</div>
+                  <div>I'm Here!</div>
+                </a>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="bg-gray-900 bg-opacity-50 rounded-3xl p-8 mb-8 backdrop-blur">
@@ -267,7 +303,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Next Drop & Opt-In */}
         <div className="text-center space-y-4">
           <p className="text-gray-400 text-lg">
             Next Drop: <span className="font-semibold text-white">TBD</span>
@@ -278,7 +313,6 @@ export default function Home() {
               <h3 className="text-xl font-semibold mb-4 text-white">Matching Preferences</h3>
               <p className="text-sm text-gray-400 mb-4">Check the boxes to opt-in for matching</p>
               
-              {/* Dating Opt-in */}
               <div className="mb-4">
                 <label className="flex items-center cursor-pointer">
                   <input
@@ -299,7 +333,6 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Friends Opt-in */}
               <div>
                 <label className="flex items-center cursor-pointer">
                   <input
